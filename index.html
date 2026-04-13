@@ -416,6 +416,17 @@ textarea.form-input { resize: vertical; min-height: 64px; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ===== Gcal detail ===== */
+.gcal-to-task-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.gcal-to-task-btn:hover { background: var(--primary-dark); }
+
 .gcal-detail-row { margin-bottom: 10px; }
 .gcal-detail-row .label { font-size: 12px; color: var(--text-light); font-weight: 600; }
 .gcal-detail-row .value { font-size: 14px; margin-top: 2px; }
@@ -916,6 +927,7 @@ const App = {
       <div class="task-right">
         <span class="task-deadline">${DeadlineHelper.formatDate(dateStr)}</span>
         <span style="font-size:12px;color:var(--gcal-border);font-weight:600;">${timeStr}</span>
+        <button class="gcal-to-task-btn" onclick="event.stopPropagation();App.gcalToTask('${this.esc(event.id)}')">+ タスク化</button>
       </div>
     </div>`;
   },
@@ -1031,6 +1043,31 @@ const App = {
     document.getElementById('filterCategory').innerHTML = filterOpts;
   },
 
+  gcalToTask(eventId) {
+    const events = Storage.loadGcalEvents();
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+    const dateStr = event.start.includes('T') ? event.start.split('T')[0] : event.start;
+    let memo = '';
+    if (event.location) memo += '場所: ' + event.location + '\n';
+    if (event.description) memo += event.description;
+    this.tasks.push({
+      id: Storage.generateId(),
+      title: event.title,
+      memo: memo.trim(),
+      deadline: dateStr,
+      priority: 'mid',
+      category: '',
+      status: 'undone',
+      completedAt: null,
+      recurring: null,
+      createdAt: new Date().toISOString()
+    });
+    Storage.saveTasks(this.tasks);
+    this.render();
+    UI.showToast('タスクに追加しました');
+  },
+
   esc(s) {
     const d = document.createElement('div');
     d.textContent = s;
@@ -1131,6 +1168,7 @@ const UI = {
       <div class="gcal-detail-row"><div class="label">日時</div><div class="value">${DeadlineHelper.formatDateFull(dateStr)} ${timeStr}</div></div>
       ${event.location ? `<div class="gcal-detail-row"><div class="label">場所</div><div class="value">${App.esc(event.location)}</div></div>` : ''}
       ${event.description ? `<div class="gcal-detail-row"><div class="label">説明</div><div class="value" style="white-space:pre-wrap;">${App.esc(event.description)}</div></div>` : ''}
+      <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="App.gcalToTask('${App.esc(event.id)}');UI.closeGcalDetail();">+ タスクに追加</button>
     `;
     document.getElementById('gcalDetailModal').classList.add('active');
   },
