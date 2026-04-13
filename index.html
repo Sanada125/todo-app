@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#4a90d9">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234a90d9'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>✓</text></svg>">
+<title>ToDo - タスク管理</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+/* ===== CSS Variables ===== */
+:root {
+  --primary: #4a90d9;
+  --primary-dark: #357abd;
+  --danger: #e74c3c;
+  --warning: #f39c12;
+  --success: #27ae60;
+  --gray: #95a5a6;
+  --gray-light: #ecf0f1;
+  --gray-dark: #7f8c8d;
+  --bg: #f5f6fa;
+  --card-bg: #ffffff;
+  --text: #2c3e50;
+  --text-light: #7f8c8d;
+  --border: #dcdde1;
+  --priority-high: #e74c3c;
+  --priority-mid: #f39c12;
+  --priority-low: #95a5a6;
+  --urgency-overdue: #e74c3c;
+  --urgency-today: #e74c3c;
+  --urgency-soon3: #e67e22;
+  --urgency-soon7: #f1c40f;
+  --gcal-bg: #e8f0fe;
+  --gcal-border: #4285f4;
+  --radius: 10px;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
+}
+button { cursor: pointer; font: inherit; border: none; background: none; }
+input, select, textarea { font: inherit; }
+
+/* ===== Header ===== */
+.header {
+  background: var(--primary);
+  color: #fff;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.header h1 { font-size: 18px; font-weight: 700; flex: 1; }
+.header-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 18px;
+  transition: background 0.2s;
+}
+.header-btn:hover { background: rgba(255,255,255,0.35); }
+.header-btn.gcal-connected { background: var(--success); }
+
+/* ===== Filter Bar ===== */
+.filter-bar {
+  background: var(--card-bg);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.filter-toggle {
+  display: none;
+  width: 100%;
+  padding: 8px;
+  background: var(--gray-light);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--text-light);
+  font-size: 14px;
+}
+.filter-controls { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.filter-select {
+  flex: 1;
+  min-width: 100px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  font-size: 13px;
+  color: var(--text);
+}
+.sort-group {
+  display: flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.sort-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  background: var(--card-bg);
+  color: var(--text-light);
+  transition: all 0.2s;
+}
+.sort-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ===== Main Content ===== */
+.main { max-width: 720px; margin: 0 auto; padding: 12px 16px 80px; }
+
+/* ===== Task Card ===== */
+.task-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid transparent;
+  transition: transform 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+.task-card:active { transform: scale(0.98); }
+.task-card.urgency-overdue { border-left-color: var(--urgency-overdue); }
+.task-card.urgency-today { border-left-color: var(--urgency-today); }
+.task-card.urgency-soon3 { border-left-color: var(--urgency-soon3); }
+.task-card.urgency-soon7 { border-left-color: var(--urgency-soon7); }
+.task-card.gcal-event {
+  background: var(--gcal-bg);
+  border-left-color: var(--gcal-border);
+  cursor: pointer;
+}
+
+.task-checkbox {
+  width: 22px; height: 22px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: all 0.2s;
+  font-size: 12px;
+  color: transparent;
+}
+.task-checkbox:hover { border-color: var(--primary); }
+.task-checkbox.checked {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+.gcal-icon {
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 16px;
+}
+
+.task-body { flex: 1; min-width: 0; }
+.task-title { font-size: 15px; font-weight: 600; word-break: break-word; }
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-light);
+}
+.task-category {
+  background: var(--gray-light);
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.task-memo-preview {
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-recurring-icon { font-size: 13px; color: var(--primary); }
+
+.task-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.task-deadline { font-size: 12px; color: var(--text-light); white-space: nowrap; }
+.task-deadline.overdue { color: var(--danger); font-weight: 700; }
+.task-deadline.today { color: var(--danger); font-weight: 600; }
+.priority-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+}
+.priority-badge.high { background: var(--priority-high); }
+.priority-badge.mid { background: var(--priority-mid); }
+.priority-badge.low { background: var(--priority-low); }
+
+/* ===== Completed Section ===== */
+.completed-section {
+  margin-top: 24px;
+}
+.completed-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--text-light);
+  cursor: pointer;
+  user-select: none;
+}
+.completed-header .arrow { transition: transform 0.2s; font-size: 12px; }
+.completed-header .arrow.open { transform: rotate(90deg); }
+.completed-list { }
+.completed-list .task-card { opacity: 0.6; }
+.completed-list .task-title { text-decoration: line-through; }
+
+/* ===== Empty State ===== */
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text-light);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* ===== Modal ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.25s;
+}
+.modal-overlay.active { opacity: 1; visibility: visible; }
+.modal {
+  background: var(--card-bg);
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  border-radius: 16px 16px 0 0;
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+.modal-overlay.active .modal { transform: translateY(0); }
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--card-bg);
+  z-index: 1;
+}
+.modal-header h2 { font-size: 16px; }
+.modal-close {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  color: var(--text-light);
+}
+.modal-close:hover { background: var(--gray-light); }
+
+.modal-body { padding: 16px; }
+.form-group { margin-bottom: 14px; }
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-bottom: 4px;
+}
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  transition: border-color 0.2s;
+}
+.form-input:focus { outline: none; border-color: var(--primary); }
+textarea.form-input { resize: vertical; min-height: 64px; }
+
+.priority-group { display: flex; gap: 8px; }
+.priority-option {
+  flex: 1;
+  padding: 8px;
+  text-align: center;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.priority-option.selected { color: #fff; }
+.priority-option[data-value="high"].selected { background: var(--priority-high); border-color: var(--priority-high); }
+.priority-option[data-value="mid"].selected { background: var(--priority-mid); border-color: var(--priority-mid); }
+.priority-option[data-value="low"].selected { background: var(--priority-low); border-color: var(--priority-low); }
+
+.recurring-toggle { display: flex; gap: 8px; margin-bottom: 8px; }
+.recurring-type-group { display: flex; gap: 8px; margin-bottom: 8px; }
+.recurring-option {
+  flex: 1;
+  padding: 6px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+.recurring-option.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.dow-group { display: flex; gap: 4px; flex-wrap: wrap; }
+.dow-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.dow-btn.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+.btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  transition: opacity 0.2s;
+}
+.btn:active { opacity: 0.7; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-secondary { background: var(--gray-light); color: var(--text); }
+.btn-danger { background: var(--danger); color: #fff; }
+
+.category-row {
+  display: flex; gap: 8px; align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--gray-light);
+}
+.category-row input {
+  flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+}
+.category-delete { color: var(--danger); font-size: 18px; padding: 4px 8px; }
+.category-add-row { display: flex; gap: 8px; margin-top: 12px; }
+.category-add-row input { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+.category-add-row button {
+  padding: 8px 16px; background: var(--primary); color: #fff; border-radius: 6px; font-weight: 600;
+}
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--text);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 300;
+  opacity: 0;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== Gcal detail ===== */
+.gcal-detail-row { margin-bottom: 10px; }
+.gcal-detail-row .label { font-size: 12px; color: var(--text-light); font-weight: 600; }
+.gcal-detail-row .value { font-size: 14px; margin-top: 2px; }
+
+/* ===== Responsive ===== */
+@media (max-width: 599px) {
+  .filter-toggle { display: block; }
+  .filter-controls { display: none; }
+  .filter-controls.open { display: flex; }
+  .modal { max-width: 100%; border-radius: 16px 16px 0 0; }
+}
+@media (min-width: 600px) {
+  .modal-overlay { align-items: center; }
+  .modal { border-radius: 16px; max-height: 85vh; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <h1>ToDo</h1>
+  <button class="header-btn" id="btnGcal" title="Googleカレンダー連携" onclick="GCal.handleAuth()">📅</button>
+  <button class="header-btn" id="btnAdd" title="新規タスク" onclick="UI.openTaskModal()">＋</button>
+  <button class="header-btn" id="btnSettings" title="カテゴリ管理" onclick="UI.openCategoryPanel()">⚙</button>
+</header>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+  <div class="filter-toggle" id="filterToggle" onclick="UI.toggleFilter()">フィルタ・並び替え ▼</div>
+  <div class="filter-controls" id="filterControls">
+    <select class="filter-select" id="filterCategory" onchange="App.render()"><option value="">すべてのカテゴリ</option></select>
+    <select class="filter-select" id="filterPriority" onchange="App.render()">
+      <option value="">すべての優先度</option>
+      <option value="high">高</option>
+      <option value="mid">中</option>
+      <option value="low">低</option>
+    </select>
+    <div class="sort-group">
+      <button class="sort-btn active" data-sort="deadline" onclick="App.setSort('deadline')">期限順</button>
+      <button class="sort-btn" data-sort="priority" onclick="App.setSort('priority')">優先度順</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main -->
+<main class="main" id="mainContent"></main>
+
+<!-- Task Modal -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="taskModalTitle">新規タスク</h2>
+      <button class="modal-close" onclick="UI.closeTaskModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>タイトル *</label>
+        <input type="text" class="form-input" id="formTitle" placeholder="タスク名を入力">
+      </div>
+      <div class="form-group">
+        <label>期限</label>
+        <input type="date" class="form-input" id="formDeadline">
+      </div>
+      <div class="form-group">
+        <label>優先度</label>
+        <div class="priority-group">
+          <button class="priority-option" data-value="high" onclick="UI.setPriority('high')">高</button>
+          <button class="priority-option selected" data-value="mid" onclick="UI.setPriority('mid')">中</button>
+          <button class="priority-option" data-value="low" onclick="UI.setPriority('low')">低</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>カテゴリ</label>
+        <select class="form-input" id="formCategory">
+          <option value="">なし</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>メモ</label>
+        <textarea class="form-input" id="formMemo" rows="3" placeholder="メモを入力"></textarea>
+      </div>
+      <div class="form-group">
+        <label>繰り返し</label>
+        <div class="recurring-toggle">
+          <button class="recurring-option selected" data-rec="none" onclick="UI.setRecurring('none')">なし</button>
+          <button class="recurring-option" data-rec="daily" onclick="UI.setRecurring('daily')">毎日</button>
+          <button class="recurring-option" data-rec="weekly" onclick="UI.setRecurring('weekly')">毎週</button>
+          <button class="recurring-option" data-rec="monthly" onclick="UI.setRecurring('monthly')">毎月</button>
+        </div>
+        <div id="recurringWeekly" style="display:none">
+          <label style="font-size:12px;color:var(--text-light);margin-bottom:4px;display:block;">曜日を選択</label>
+          <div class="dow-group">
+            <button class="dow-btn" data-dow="0" onclick="UI.setDow(0)">日</button>
+            <button class="dow-btn" data-dow="1" onclick="UI.setDow(1)">月</button>
+            <button class="dow-btn" data-dow="2" onclick="UI.setDow(2)">火</button>
+            <button class="dow-btn" data-dow="3" onclick="UI.setDow(3)">水</button>
+            <button class="dow-btn" data-dow="4" onclick="UI.setDow(4)">木</button>
+            <button class="dow-btn" data-dow="5" onclick="UI.setDow(5)">金</button>
+            <button class="dow-btn" data-dow="6" onclick="UI.setDow(6)">土</button>
+          </div>
+        </div>
+        <div id="recurringMonthly" style="display:none">
+          <label style="font-size:12px;color:var(--text-light);margin-bottom:4px;display:block;">日を指定（1〜31）</label>
+          <input type="number" class="form-input" id="formDayOfMonth" min="1" max="31" value="1" style="width:100px;">
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="UI.closeTaskModal()">キャンセル</button>
+      <button class="btn btn-danger" id="btnDeleteTask" style="display:none" onclick="App.deleteTask()">削除</button>
+      <button class="btn btn-primary" onclick="App.submitTask()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category Modal -->
+<div class="modal-overlay" id="categoryModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>カテゴリ管理</h2>
+      <button class="modal-close" onclick="UI.closeCategoryPanel()">×</button>
+    </div>
+    <div class="modal-body" id="categoryList"></div>
+    <div class="modal-body" style="padding-top:0">
+      <div class="category-add-row">
+        <input type="text" id="newCategoryInput" placeholder="新しいカテゴリ名">
+        <button onclick="App.addCategory()">追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GCal Detail Modal -->
+<div class="modal-overlay" id="gcalDetailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>カレンダー予定</h2>
+      <button class="modal-close" onclick="UI.closeGcalDetail()">×</button>
+    </div>
+    <div class="modal-body" id="gcalDetailBody"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Configuration - Google Calendar API
+   ============================================================ */
+const GCAL_CLIENT_ID = '604438050315-p1gvplvga9mc8nj57e575kumu8uo7vr8.apps.googleusercontent.com';
+const GCAL_SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
+
+/* ============================================================
+   Storage Layer
+   ============================================================ */
+const Storage = {
+  _get(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) || fallback; }
+    catch { return fallback; }
+  },
+  loadTasks() { return this._get('todo_tasks', []); },
+  saveTasks(tasks) { localStorage.setItem('todo_tasks', JSON.stringify(tasks)); },
+  loadCategories() { return this._get('todo_categories', []); },
+  saveCategories(cats) { localStorage.setItem('todo_categories', JSON.stringify(cats)); },
+  loadGcalEvents() { return this._get('todo_gcal_events', []); },
+  saveGcalEvents(events) { localStorage.setItem('todo_gcal_events', JSON.stringify(events)); },
+  loadGcalToken() { return this._get('todo_gcal_token', null); },
+  saveGcalToken(token) { localStorage.setItem('todo_gcal_token', JSON.stringify(token)); },
+  clearGcalToken() { localStorage.removeItem('todo_gcal_token'); },
+  generateId() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+};
+
+/* ============================================================
+   Deadline Helper
+   ============================================================ */
+const DeadlineHelper = {
+  getUrgency(dateStr) {
+    if (!dateStr) return 'none';
+    const today = new Date(); today.setHours(0,0,0,0);
+    const d = new Date(dateStr + 'T00:00:00'); d.setHours(0,0,0,0);
+    const diff = Math.floor((d - today) / 86400000);
+    if (diff < 0) return 'overdue';
+    if (diff === 0) return 'today';
+    if (diff <= 3) return 'soon3';
+    if (diff <= 7) return 'soon7';
+    return 'normal';
+  },
+  formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return `${d.getMonth()+1}/${d.getDate()}`;
+  },
+  formatDateFull(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    const dow = ['日','月','火','水','木','金','土'][d.getDay()];
+    return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} (${dow})`;
+  }
+};
+
+/* ============================================================
+   Recurring Helper
+   ============================================================ */
+const RecurringHelper = {
+  calcNextDeadline(task) {
+    const base = task.deadline ? new Date(task.deadline + 'T00:00:00') : new Date();
+    base.setHours(0,0,0,0);
+    const r = task.recurring;
+    if (r.type === 'daily') {
+      base.setDate(base.getDate() + 1);
+    } else if (r.type === 'weekly') {
+      const target = r.dayOfWeek;
+      let d = new Date(base);
+      d.setDate(d.getDate() + 1);
+      while (d.getDay() !== target) d.setDate(d.getDate() + 1);
+      return this._toDateStr(d);
+    } else if (r.type === 'monthly') {
+      let y = base.getFullYear(), m = base.getMonth() + 1;
+      if (m > 11) { m = 0; y++; } // fix: month is 0-indexed for Date
+      const target = r.dayOfMonth;
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      const day = Math.min(target, lastDay);
+      return `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    }
+    return this._toDateStr(base);
+  },
+  _toDateStr(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  },
+  generateNext(task) {
+    return {
+      id: Storage.generateId(),
+      title: task.title,
+      memo: task.memo,
+      deadline: this.calcNextDeadline(task),
+      priority: task.priority,
+      category: task.category,
+      status: 'undone',
+      completedAt: null,
+      recurring: { ...task.recurring },
+      createdAt: new Date().toISOString()
+    };
+  }
+};
+
+/* ============================================================
+   Google Calendar
+   ============================================================ */
+const GCal = {
+  tokenClient: null,
+  accessToken: null,
+
+  init() {
+    if (GCAL_CLIENT_ID === 'YOUR_CLIENT_ID_HERE') return;
+    if (typeof google === 'undefined' || !google.accounts) {
+      setTimeout(() => GCal.init(), 500);
+      return;
+    }
+    this.tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GCAL_CLIENT_ID,
+      scope: GCAL_SCOPES,
+      callback: (resp) => {
+        if (resp.error) return;
+        this.accessToken = resp.access_token;
+        Storage.saveGcalToken({ access_token: resp.access_token, expires: Date.now() + resp.expires_in * 1000 });
+        document.getElementById('btnGcal').classList.add('gcal-connected');
+        this.fetchEvents();
+        UI.showToast('カレンダー連携しました');
+      }
+    });
+    const saved = Storage.loadGcalToken();
+    if (saved && saved.expires > Date.now()) {
+      this.accessToken = saved.access_token;
+      document.getElementById('btnGcal').classList.add('gcal-connected');
+      this.fetchEvents();
+    }
+  },
+
+  handleAuth() {
+    if (GCAL_CLIENT_ID === 'YOUR_CLIENT_ID_HERE') {
+      UI.showToast('クライアントIDを設定してください');
+      return;
+    }
+    if (this.accessToken) {
+      this.fetchEvents();
+      UI.showToast('カレンダーを更新しました');
+    } else if (this.tokenClient) {
+      this.tokenClient.requestAccessToken();
+    }
+  },
+
+  async fetchEvents() {
+    if (!this.accessToken) return;
+    const now = new Date();
+    const min = now.toISOString();
+    const max = new Date(now.getTime() + 7 * 86400000).toISOString();
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}&singleEvents=true&orderBy=startTime&maxResults=50`,
+        { headers: { Authorization: `Bearer ${this.accessToken}` } }
+      );
+      if (res.status === 401) {
+        this.accessToken = null;
+        Storage.clearGcalToken();
+        document.getElementById('btnGcal').classList.remove('gcal-connected');
+        UI.showToast('認証が切れました。再連携してください');
+        return;
+      }
+      const data = await res.json();
+      const events = (data.items || []).map(e => ({
+        id: 'gcal_' + e.id,
+        title: e.summary || '(タイトルなし)',
+        start: e.start.dateTime || e.start.date,
+        end: e.end.dateTime || e.end.date,
+        location: e.location || '',
+        description: e.description || '',
+        isAllDay: !!e.start.date
+      }));
+      Storage.saveGcalEvents(events);
+      App.render();
+    } catch (e) {
+      const cached = Storage.loadGcalEvents();
+      if (cached.length) App.render();
+    }
+  }
+};
+
+/* ============================================================
+   App State & Logic
+   ============================================================ */
+const App = {
+  tasks: [],
+  categories: [],
+  editingTaskId: null,
+  currentSort: 'deadline',
+
+  init() {
+    this.tasks = Storage.loadTasks();
+    this.categories = Storage.loadCategories();
+    this.purgeOldCompleted();
+    this.render();
+    this.updateCategorySelects();
+    GCal.init();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  },
+
+  purgeOldCompleted() {
+    const now = Date.now();
+    const SEVEN_DAYS = 7 * 86400000;
+    const before = this.tasks.length;
+    this.tasks = this.tasks.filter(t => {
+      if (t.status === 'done' && t.completedAt) {
+        return (now - new Date(t.completedAt).getTime()) < SEVEN_DAYS;
+      }
+      return true;
+    });
+    if (this.tasks.length !== before) Storage.saveTasks(this.tasks);
+  },
+
+  setSort(sort) {
+    this.currentSort = sort;
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === sort));
+    this.render();
+  },
+
+  getFilteredTasks() {
+    const cat = document.getElementById('filterCategory').value;
+    const pri = document.getElementById('filterPriority').value;
+    let tasks = this.tasks.filter(t => t.status === 'undone');
+    if (cat) tasks = tasks.filter(t => t.category === cat);
+    if (pri) tasks = tasks.filter(t => t.priority === pri);
+    return this.sortTasks(tasks);
+  },
+
+  getCompletedTasks() {
+    return this.tasks.filter(t => t.status === 'done').sort((a, b) => {
+      return new Date(b.completedAt) - new Date(a.completedAt);
+    });
+  },
+
+  sortTasks(tasks) {
+    const priOrder = { high: 0, mid: 1, low: 2 };
+    if (this.currentSort === 'priority') {
+      return tasks.sort((a, b) => priOrder[a.priority] - priOrder[b.priority]);
+    }
+    return tasks.sort((a, b) => {
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return a.deadline.localeCompare(b.deadline);
+    });
+  },
+
+  render() {
+    const main = document.getElementById('mainContent');
+    const active = this.getFilteredTasks();
+    const completed = this.getCompletedTasks();
+    const gcalEvents = Storage.loadGcalEvents();
+
+    let html = '';
+
+    // Merge active tasks + gcal events by date
+    const allItems = [];
+    active.forEach(t => allItems.push({ type: 'task', data: t }));
+    gcalEvents.forEach(e => {
+      const startDate = e.start.includes('T') ? e.start.split('T')[0] : e.start;
+      allItems.push({ type: 'gcal', data: e, sortDate: startDate });
+    });
+
+    if (this.currentSort === 'deadline') {
+      allItems.sort((a, b) => {
+        const da = a.type === 'task' ? (a.data.deadline || '9999-99-99') : a.sortDate;
+        const db = b.type === 'task' ? (b.data.deadline || '9999-99-99') : b.sortDate;
+        return da.localeCompare(db);
+      });
+    }
+
+    if (allItems.length === 0) {
+      html += '<div class="empty-state"><div class="icon">✨</div><p>タスクはありません</p></div>';
+    } else {
+      allItems.forEach(item => {
+        if (item.type === 'task') {
+          html += this.renderTaskCard(item.data);
+        } else {
+          html += this.renderGcalCard(item.data);
+        }
+      });
+    }
+
+    // Completed section
+    if (completed.length > 0) {
+      html += `<div class="completed-section">
+        <div class="completed-header" onclick="UI.toggleCompleted()">
+          <span class="arrow" id="completedArrow">▶</span>
+          <span>完了済み (${completed.length}件)</span>
+          <span style="font-size:11px;color:var(--text-light);margin-left:auto;">完了から7日後に自動削除</span>
+        </div>
+        <div class="completed-list" id="completedList" style="display:none">
+          ${completed.map(t => this.renderTaskCard(t, true)).join('')}
+        </div>
+      </div>`;
+    }
+
+    main.innerHTML = html;
+  },
+
+  renderTaskCard(task, isCompleted = false) {
+    const urgency = isCompleted ? '' : DeadlineHelper.getUrgency(task.deadline);
+    const urgencyClass = urgency && urgency !== 'normal' && urgency !== 'none' ? ` urgency-${urgency}` : '';
+    const deadlineClass = (urgency === 'overdue' ? ' overdue' : urgency === 'today' ? ' today' : '');
+    const deadlineText = task.deadline ? DeadlineHelper.formatDate(task.deadline) : '';
+    const priLabel = { high: '高', mid: '中', low: '低' }[task.priority];
+    const recurIcon = task.recurring ? '<span class="task-recurring-icon">🔁</span>' : '';
+
+    return `<div class="task-card${urgencyClass}" onclick="UI.openTaskModal('${task.id}')">
+      <div class="task-checkbox${isCompleted ? ' checked' : ''}" onclick="event.stopPropagation();App.toggleTask('${task.id}')">✓</div>
+      <div class="task-body">
+        <div class="task-title">${this.esc(task.title)} ${recurIcon}</div>
+        <div class="task-meta">
+          ${task.category ? `<span class="task-category">${this.esc(task.category)}</span>` : ''}
+          ${isCompleted && task.completedAt ? `<span>完了: ${new Date(task.completedAt).toLocaleDateString('ja-JP')}</span>` : ''}
+        </div>
+        ${task.memo ? `<div class="task-memo-preview">${this.esc(task.memo)}</div>` : ''}
+      </div>
+      <div class="task-right">
+        ${deadlineText ? `<span class="task-deadline${deadlineClass}">${deadlineText}</span>` : ''}
+        <span class="priority-badge ${task.priority}">${priLabel}</span>
+      </div>
+    </div>`;
+  },
+
+  renderGcalCard(event) {
+    let timeStr = '';
+    if (event.isAllDay) {
+      timeStr = '終日';
+    } else {
+      const start = new Date(event.start);
+      timeStr = `${start.getHours()}:${String(start.getMinutes()).padStart(2,'0')}`;
+    }
+    const dateStr = event.start.includes('T') ? event.start.split('T')[0] : event.start;
+
+    return `<div class="task-card gcal-event" onclick="UI.openGcalDetail('${this.esc(event.id)}')">
+      <div class="gcal-icon">📅</div>
+      <div class="task-body">
+        <div class="task-title">${this.esc(event.title)}</div>
+        <div class="task-meta">
+          <span class="task-category" style="background:#d4e5fc;color:#1a73e8;">カレンダー</span>
+          ${event.location ? `<span>📍 ${this.esc(event.location)}</span>` : ''}
+        </div>
+      </div>
+      <div class="task-right">
+        <span class="task-deadline">${DeadlineHelper.formatDate(dateStr)}</span>
+        <span style="font-size:12px;color:var(--gcal-border);font-weight:600;">${timeStr}</span>
+      </div>
+    </div>`;
+  },
+
+  toggleTask(id) {
+    const task = this.tasks.find(t => t.id === id);
+    if (!task) return;
+    if (task.status === 'undone') {
+      task.status = 'done';
+      task.completedAt = new Date().toISOString();
+      if (task.recurring) {
+        const next = RecurringHelper.generateNext(task);
+        this.tasks.push(next);
+        UI.showToast('次の繰り返しタスクを作成しました');
+      }
+    } else {
+      task.status = 'undone';
+      task.completedAt = null;
+    }
+    Storage.saveTasks(this.tasks);
+    this.render();
+  },
+
+  submitTask() {
+    const title = document.getElementById('formTitle').value.trim();
+    if (!title) { UI.showToast('タイトルを入力してください'); return; }
+
+    const deadline = document.getElementById('formDeadline').value || null;
+    const priority = document.querySelector('.priority-option.selected')?.dataset.value || 'mid';
+    const category = document.getElementById('formCategory').value;
+    const memo = document.getElementById('formMemo').value.trim();
+
+    let recurring = null;
+    const recType = document.querySelector('.recurring-option.selected[data-rec]')?.dataset.rec;
+    if (recType && recType !== 'none') {
+      recurring = { type: recType, dayOfWeek: null, dayOfMonth: null };
+      if (recType === 'weekly') {
+        const sel = document.querySelector('.dow-btn.selected');
+        recurring.dayOfWeek = sel ? parseInt(sel.dataset.dow) : 1;
+      } else if (recType === 'monthly') {
+        recurring.dayOfMonth = parseInt(document.getElementById('formDayOfMonth').value) || 1;
+      }
+    }
+
+    if (this.editingTaskId) {
+      const task = this.tasks.find(t => t.id === this.editingTaskId);
+      if (task) {
+        task.title = title; task.deadline = deadline; task.priority = priority;
+        task.category = category; task.memo = memo; task.recurring = recurring;
+      }
+      UI.showToast('タスクを更新しました');
+    } else {
+      this.tasks.push({
+        id: Storage.generateId(), title, memo, deadline, priority, category,
+        status: 'undone', completedAt: null, recurring, createdAt: new Date().toISOString()
+      });
+      UI.showToast('タスクを追加しました');
+    }
+
+    Storage.saveTasks(this.tasks);
+    UI.closeTaskModal();
+    this.render();
+  },
+
+  deleteTask() {
+    if (!this.editingTaskId) return;
+    if (!confirm('このタスクを削除しますか？')) return;
+    this.tasks = this.tasks.filter(t => t.id !== this.editingTaskId);
+    Storage.saveTasks(this.tasks);
+    UI.closeTaskModal();
+    this.render();
+    UI.showToast('タスクを削除しました');
+  },
+
+  addCategory() {
+    const input = document.getElementById('newCategoryInput');
+    const name = input.value.trim();
+    if (!name) return;
+    if (this.categories.includes(name)) { UI.showToast('同じ名前のカテゴリがあります'); return; }
+    this.categories.push(name);
+    Storage.saveCategories(this.categories);
+    input.value = '';
+    UI.renderCategoryList();
+    this.updateCategorySelects();
+    UI.showToast('カテゴリを追加しました');
+  },
+
+  updateCategory(index, newName) {
+    const old = this.categories[index];
+    this.categories[index] = newName;
+    this.tasks.forEach(t => { if (t.category === old) t.category = newName; });
+    Storage.saveCategories(this.categories);
+    Storage.saveTasks(this.tasks);
+    this.updateCategorySelects();
+  },
+
+  deleteCategory(index) {
+    const name = this.categories[index];
+    if (!confirm(`「${name}」を削除しますか？\nタスクのカテゴリは空になります。`)) return;
+    this.tasks.forEach(t => { if (t.category === name) t.category = ''; });
+    this.categories.splice(index, 1);
+    Storage.saveCategories(this.categories);
+    Storage.saveTasks(this.tasks);
+    UI.renderCategoryList();
+    this.updateCategorySelects();
+    this.render();
+  },
+
+  updateCategorySelects() {
+    const opts = '<option value="">なし</option>' + this.categories.map(c => `<option value="${this.esc(c)}">${this.esc(c)}</option>`).join('');
+    document.getElementById('formCategory').innerHTML = opts;
+    const filterOpts = '<option value="">すべてのカテゴリ</option>' + this.categories.map(c => `<option value="${this.esc(c)}">${this.esc(c)}</option>`).join('');
+    document.getElementById('filterCategory').innerHTML = filterOpts;
+  },
+
+  esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+};
+
+/* ============================================================
+   UI
+   ============================================================ */
+const UI = {
+  openTaskModal(taskId) {
+    const modal = document.getElementById('taskModal');
+    const titleEl = document.getElementById('taskModalTitle');
+    const deleteBtn = document.getElementById('btnDeleteTask');
+
+    // Reset form
+    document.getElementById('formTitle').value = '';
+    document.getElementById('formDeadline').value = '';
+    document.getElementById('formMemo').value = '';
+    document.getElementById('formCategory').value = '';
+    this.setPriority('mid');
+    this.setRecurring('none');
+
+    if (taskId) {
+      const task = App.tasks.find(t => t.id === taskId);
+      if (!task) return;
+      App.editingTaskId = taskId;
+      titleEl.textContent = 'タスクを編集';
+      deleteBtn.style.display = '';
+      document.getElementById('formTitle').value = task.title;
+      document.getElementById('formDeadline').value = task.deadline || '';
+      document.getElementById('formMemo').value = task.memo;
+      document.getElementById('formCategory').value = task.category;
+      this.setPriority(task.priority);
+      if (task.recurring) {
+        this.setRecurring(task.recurring.type);
+        if (task.recurring.type === 'weekly' && task.recurring.dayOfWeek !== null) {
+          this.setDow(task.recurring.dayOfWeek);
+        }
+        if (task.recurring.type === 'monthly' && task.recurring.dayOfMonth !== null) {
+          document.getElementById('formDayOfMonth').value = task.recurring.dayOfMonth;
+        }
+      }
+    } else {
+      App.editingTaskId = null;
+      titleEl.textContent = '新規タスク';
+      deleteBtn.style.display = 'none';
+    }
+
+    modal.classList.add('active');
+  },
+
+  closeTaskModal() {
+    document.getElementById('taskModal').classList.remove('active');
+    App.editingTaskId = null;
+  },
+
+  openCategoryPanel() {
+    this.renderCategoryList();
+    document.getElementById('categoryModal').classList.add('active');
+  },
+
+  closeCategoryPanel() {
+    document.getElementById('categoryModal').classList.remove('active');
+  },
+
+  renderCategoryList() {
+    const list = document.getElementById('categoryList');
+    if (App.categories.length === 0) {
+      list.innerHTML = '<p style="color:var(--text-light);font-size:14px;">カテゴリはまだありません</p>';
+      return;
+    }
+    list.innerHTML = App.categories.map((c, i) => `
+      <div class="category-row">
+        <input type="text" value="${App.esc(c)}" onchange="App.updateCategory(${i}, this.value)">
+        <button class="category-delete" onclick="App.deleteCategory(${i})">×</button>
+      </div>
+    `).join('');
+  },
+
+  openGcalDetail(eventId) {
+    const events = Storage.loadGcalEvents();
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+    const body = document.getElementById('gcalDetailBody');
+    let timeStr;
+    if (event.isAllDay) {
+      timeStr = '終日';
+    } else {
+      const s = new Date(event.start);
+      const e2 = new Date(event.end);
+      timeStr = `${s.getHours()}:${String(s.getMinutes()).padStart(2,'0')} 〜 ${e2.getHours()}:${String(e2.getMinutes()).padStart(2,'0')}`;
+    }
+    const dateStr = event.start.includes('T') ? event.start.split('T')[0] : event.start;
+    body.innerHTML = `
+      <div class="gcal-detail-row"><div class="label">タイトル</div><div class="value">${App.esc(event.title)}</div></div>
+      <div class="gcal-detail-row"><div class="label">日時</div><div class="value">${DeadlineHelper.formatDateFull(dateStr)} ${timeStr}</div></div>
+      ${event.location ? `<div class="gcal-detail-row"><div class="label">場所</div><div class="value">${App.esc(event.location)}</div></div>` : ''}
+      ${event.description ? `<div class="gcal-detail-row"><div class="label">説明</div><div class="value" style="white-space:pre-wrap;">${App.esc(event.description)}</div></div>` : ''}
+    `;
+    document.getElementById('gcalDetailModal').classList.add('active');
+  },
+
+  closeGcalDetail() {
+    document.getElementById('gcalDetailModal').classList.remove('active');
+  },
+
+  setPriority(val) {
+    document.querySelectorAll('.priority-option').forEach(b => b.classList.toggle('selected', b.dataset.value === val));
+  },
+
+  setRecurring(type) {
+    document.querySelectorAll('.recurring-option[data-rec]').forEach(b => b.classList.toggle('selected', b.dataset.rec === type));
+    document.getElementById('recurringWeekly').style.display = type === 'weekly' ? '' : 'none';
+    document.getElementById('recurringMonthly').style.display = type === 'monthly' ? '' : 'none';
+  },
+
+  setDow(dow) {
+    document.querySelectorAll('.dow-btn').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.dow) === dow));
+  },
+
+  toggleFilter() {
+    const controls = document.getElementById('filterControls');
+    controls.classList.toggle('open');
+  },
+
+  toggleCompleted() {
+    const list = document.getElementById('completedList');
+    const arrow = document.getElementById('completedArrow');
+    const isOpen = list.style.display !== 'none';
+    list.style.display = isOpen ? 'none' : '';
+    arrow.classList.toggle('open', !isOpen);
+  },
+
+  showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+  }
+};
+
+/* ===== Init ===== */
+document.addEventListener('DOMContentLoaded', () => App.init());
+</script>
+</body>
+</html>
